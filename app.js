@@ -1,8 +1,8 @@
 const WORKER =
     "https://infinite-portal.scarypanda11721.workers.dev";
 
-const frame =
-    document.getElementById("frame");
+const view =
+    document.getElementById("view");
 
 const urlBar =
     document.getElementById("urlBar");
@@ -10,10 +10,8 @@ const urlBar =
 const HISTORY_KEY =
     "proxy-history";
 
-const LAST_URL_KEY =
+const LAST_KEY =
     "proxy-last-url";
-
-let currentURL = "";
 
 function normalize(url) {
 
@@ -22,41 +20,11 @@ function normalize(url) {
         !url.startsWith("https://")
     ) {
 
-        url = "https://" + url;
+        url =
+            "https://" + url;
     }
 
     return url;
-}
-
-function saveHistory(url) {
-
-    let history =
-        JSON.parse(
-            localStorage.getItem(HISTORY_KEY)
-            || "[]"
-        );
-
-    // Remove duplicates
-    history =
-        history.filter(
-            item => item !== url
-        );
-
-    // Add newest
-    history.unshift(url);
-
-    // Limit size
-    history = history.slice(0, 100);
-
-    localStorage.setItem(
-        HISTORY_KEY,
-        JSON.stringify(history)
-    );
-
-    localStorage.setItem(
-        LAST_URL_KEY,
-        url
-    );
 }
 
 function proxify(url) {
@@ -68,59 +36,129 @@ function proxify(url) {
     );
 }
 
-function deproxify(url) {
+function saveHistory(url) {
 
-    try {
+    let history =
+        JSON.parse(
+            localStorage.getItem(
+                HISTORY_KEY
+            ) || "[]"
+        );
 
-        const parsed =
-            new URL(url);
+    history =
+        history.filter(
+            x => x !== url
+        );
 
-        const real =
-            parsed.searchParams.get("url");
+    history.unshift(url);
 
-        return real || url;
+    history =
+        history.slice(0, 100);
 
-    } catch {
+    localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(history)
+    );
 
-        return url;
-    }
+    localStorage.setItem(
+        LAST_KEY,
+        url
+    );
 }
 
-function updateBar(url) {
+async function load(
+    url,
+    push=true
+) {
 
-    currentURL = url;
+    url =
+        normalize(url);
 
-    urlBar.value = url;
-}
-
-function load(url, push=true) {
-
-    url = normalize(url);
-
-    updateBar(url);
+    urlBar.value =
+        url;
 
     saveHistory(url);
 
-    const proxied =
-        proxify(url);
+    const response =
+        await fetch(
+            proxify(url)
+        );
 
-    frame.src = proxied;
+    const html =
+        await response.text();
+
+    view.innerHTML =
+        html;
+
+    rewriteLinks();
 
     if (push) {
 
         history.pushState(
             { url },
             "",
-            "#" + encodeURIComponent(url)
+            "#" +
+            encodeURIComponent(url)
         );
     }
 }
 
-document.getElementById("go")
-.addEventListener("click", () => {
+function rewriteLinks() {
 
-    load(urlBar.value);
-});
+    // Links
+    document
+    .querySelectorAll("#view a")
+    .forEach(a => {
+
+        a.addEventListener(
+            "click",
+            e => {
+
+                e.preventDefault();
+
+                const href =
+                    a.href;
+
+                if (href) {
+
+                    load(href);
+                }
+            }
+        );
+    });
+
+    // Forms
+    document
+    .querySelectorAll("#view form")
+    .forEach(form => {
+
+        form.addEventListener(
+            "submit",
+            e => {
+
+                e.preventDefault();
+
+                const action =
+                    form.action;
+
+                if (action) {
+
+                    load(action);
+                }
+            }
+        );
+    });
+}
+
+document
+.getElementById("go")
+.addEventListener(
+    "click",
+    () => {
+
+        load(urlBar.value);
+    }
+);
 
 urlBar.addEventListener(
     "keydown",
@@ -133,24 +171,33 @@ urlBar.addEventListener(
     }
 );
 
-document.getElementById("back")
-.addEventListener(
-    "click",
-    () => history.back()
-);
-
-document.getElementById("forward")
-.addEventListener(
-    "click",
-    () => history.forward()
-);
-
-document.getElementById("refresh")
+document
+.getElementById("back")
 .addEventListener(
     "click",
     () => {
 
-        frame.src = frame.src;
+        history.back();
+    }
+);
+
+document
+.getElementById("forward")
+.addEventListener(
+    "click",
+    () => {
+
+        history.forward();
+    }
+);
+
+document
+.getElementById("refresh")
+.addEventListener(
+    "click",
+    () => {
+
+        load(urlBar.value);
     }
 );
 
@@ -168,49 +215,19 @@ window.addEventListener(
     }
 );
 
-// Detect iframe navigation changes
-frame.addEventListener(
-    "load",
-    () => {
-
-        try {
-
-            const current =
-                deproxify(frame.contentWindow.location.href);
-
-            if (
-                current &&
-                current !== currentURL
-            ) {
-
-                updateBar(current);
-
-                saveHistory(current);
-
-                history.replaceState(
-                    { url: current },
-                    "",
-                    "#" + encodeURIComponent(current)
-                );
-            }
-
-        } catch {
-
-            // Cross-origin protection
-            // Ignore silently
-        }
-    }
-);
-
 // Restore last page
 const saved =
-    localStorage.getItem(LAST_URL_KEY);
+    localStorage.getItem(
+        LAST_KEY
+    );
 
 if (saved) {
 
     load(saved, false);
 
-} else if (location.hash.length > 1) {
+} else if (
+    location.hash.length > 1
+) {
 
     load(
         decodeURIComponent(
