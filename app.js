@@ -1,5 +1,5 @@
 const WORKER =
-    "https://infinite-portal.scarypanda11721.workers.dev";
+    "https://YOUR-WORKER.workers.dev";
 
 const view =
     document.getElementById("view");
@@ -71,36 +71,84 @@ async function load(
     push=true
 ) {
 
-    url =
-        normalize(url);
+    try {
 
-    urlBar.value =
-        url;
+        url =
+            normalize(url);
 
-    saveHistory(url);
+        urlBar.value =
+            url;
 
-    const response =
-        await fetch(
-            proxify(url)
-        );
+        saveHistory(url);
 
-    const html =
-        await response.text();
+        const response =
+            await fetch(
+                proxify(url)
+            );
 
-    view.innerHTML =
-        html;
+        const html =
+            await response.text();
 
-    rewriteLinks();
+        renderHTML(html);
 
-    if (push) {
+        rewriteLinks();
 
-        history.pushState(
-            { url },
-            "",
-            "#" +
-            encodeURIComponent(url)
-        );
+        if (push) {
+
+            history.pushState(
+                { url },
+                "",
+                "#" +
+                encodeURIComponent(url)
+            );
+        }
+
+    } catch (err) {
+
+        view.innerHTML = `
+            <div style="
+                padding:20px;
+                font-family:Arial;
+            ">
+                <h1>Proxy Error</h1>
+
+                <pre>${err}</pre>
+            </div>
+        `;
     }
+}
+
+function renderHTML(html) {
+
+    view.innerHTML = html;
+
+    // Execute scripts
+    const scripts =
+        view.querySelectorAll("script");
+
+    scripts.forEach(oldScript => {
+
+        const newScript =
+            document.createElement("script");
+
+        for (
+            const attr
+            of oldScript.attributes
+        ) {
+
+            newScript.setAttribute(
+                attr.name,
+                attr.value
+            );
+        }
+
+        newScript.textContent =
+            oldScript.textContent;
+
+        oldScript.replaceWith(
+            newScript
+        );
+    });
 }
 
 function rewriteLinks() {
