@@ -1,11 +1,19 @@
 const WORKER =
-    "https://web-proxy.scarypanda11721.workers.dev/";
+    "https://web-proxy-phs.scarypanda11721.workers.dev";
 
 const frame =
     document.getElementById("frame");
 
 const urlBar =
     document.getElementById("urlBar");
+
+const HISTORY_KEY =
+    "proxy-history";
+
+const LAST_URL_KEY =
+    "proxy-last-url";
+
+let currentURL = "";
 
 function normalize(url) {
 
@@ -20,16 +28,81 @@ function normalize(url) {
     return url;
 }
 
+function saveHistory(url) {
+
+    let history =
+        JSON.parse(
+            localStorage.getItem(HISTORY_KEY)
+            || "[]"
+        );
+
+    // Remove duplicates
+    history =
+        history.filter(
+            item => item !== url
+        );
+
+    // Add newest
+    history.unshift(url);
+
+    // Limit size
+    history = history.slice(0, 100);
+
+    localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(history)
+    );
+
+    localStorage.setItem(
+        LAST_URL_KEY,
+        url
+    );
+}
+
+function proxify(url) {
+
+    return (
+        WORKER +
+        "/?url=" +
+        encodeURIComponent(url)
+    );
+}
+
+function deproxify(url) {
+
+    try {
+
+        const parsed =
+            new URL(url);
+
+        const real =
+            parsed.searchParams.get("url");
+
+        return real || url;
+
+    } catch {
+
+        return url;
+    }
+}
+
+function updateBar(url) {
+
+    currentURL = url;
+
+    urlBar.value = url;
+}
+
 function load(url, push=true) {
 
     url = normalize(url);
 
-    urlBar.value = url;
+    updateBar(url);
+
+    saveHistory(url);
 
     const proxied =
-        WORKER +
-        "/?url=" +
-        encodeURIComponent(url);
+        proxify(url);
 
     frame.src = proxied;
 
@@ -38,7 +111,7 @@ function load(url, push=true) {
         history.pushState(
             { url },
             "",
-            "#"+encodeURIComponent(url)
+            "#" + encodeURIComponent(url)
         );
     }
 }
@@ -95,7 +168,49 @@ window.addEventListener(
     }
 );
 
-if (location.hash.length > 1) {
+// Detect iframe navigation changes
+frame.addEventListener(
+    "load",
+    () => {
+
+        try {
+
+            const current =
+                deproxify(frame.contentWindow.location.href);
+
+            if (
+                current &&
+                current !== currentURL
+            ) {
+
+                updateBar(current);
+
+                saveHistory(current);
+
+                history.replaceState(
+                    { url: current },
+                    "",
+                    "#" + encodeURIComponent(current)
+                );
+            }
+
+        } catch {
+
+            // Cross-origin protection
+            // Ignore silently
+        }
+    }
+);
+
+// Restore last page
+const saved =
+    localStorage.getItem(LAST_URL_KEY);
+
+if (saved) {
+
+    load(saved, false);
+
+} else if (location.hash.length > 1) {
 
     load(
         decodeURIComponent(
