@@ -1,5 +1,5 @@
 const WORKER =
-    "https://web-proxy-phs.scarypanda11721.workers.dev";
+    "https://infinite-portal.scarypanda11721.workers.dev";
 
 const frame =
     document.getElementById("frame");
